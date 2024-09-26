@@ -9,12 +9,15 @@ api_endpoint = "https://tlu537m7x9.execute-api.us-east-2.amazonaws.com/dev/query
 def generar_select(tabla, campos_seleccionados, where_clause, limite):
     campos_str = ", ".join(campos_seleccionados)
     select_query = f"SELECT {campos_str} FROM {tabla}"
+
+    if limite:
+        select_query = f"SELECT TOP {limite} {campos_str} FROM {tabla}"
+    else:
+        select_query = f"SELECT {campos_str} FROM {tabla}"
+
     if where_clause:
         select_query += f" WHERE {where_clause}"
-    if limite:
-        select_query += f" LIMIT {limite}"
-    else:
-        select_query += " LIMIT 10"
+
     return select_query
 
 def generar_where(tabla_seleccionada, year, month, day):
@@ -42,6 +45,29 @@ def get_download_link(output_location):
     if response.status_code == 200:
         download_link = response.json().get("url")  # Asegúrate de que la respuesta tiene la clave 'download_link'
         return download_link
+    else:
+        st.error(f"Error en la solicitud: {response.status_code}")
+        return None
+
+def get_optimizes_query(query, asterisco, fechaField):
+    api_endpoint = "https://tlu537m7x9.execute-api.us-east-2.amazonaws.com/prod/transforQuery"
+    payload={
+              "query": query,
+              "asterisco": asterisco,
+              "fechaField": fechaField
+            }
+    headers = {"Content-Type": "application/json"}
+    
+    # Realizar la solicitud POST al API
+    response = requests.post(api_endpoint, data=json.dumps(payload), headers=headers)
+
+    if response.status_code == 200:
+        print('response.json()',response.json())
+        transformedQuery = response.json().get("transformedQuery")  # Asegúrate de que la respuesta tiene la clave 'download_link'
+
+        print('transformedQuery:',transformedQuery)
+
+        return transformedQuery
     else:
         st.error(f"Error en la solicitud: {response.status_code}")
         return None
@@ -86,11 +112,28 @@ def main():
 
         # Mostrar la consulta generada
         if campos_seleccionados:
+
             consulta_sql = generar_select(tabla_seleccionada, campos_seleccionados, where_clause, limite)
             st.write(f"Consulta generada: `{consulta_sql}`")
 
             # Botón para ejecutar la consulta
             if st.button("Ejecutar consulta"):
+
+                #Paso previo de optimización de la consulta.
+
+                campo_fecha = tables[tabla_seleccionada]["campo_fecha"]
+
+                print('consulta_sql:',consulta_sql)
+                print('campo_fecha:',campo_fecha)
+                print('campos_seleccionados:',campos_seleccionados)
+
+                consulta_sql = get_optimizes_query(consulta_sql,campos_seleccionados,campo_fecha)
+
+                print('consulta_sql:',consulta_sql)
+                st.write("")
+                st.write(f"Consulta Optimizada: `{consulta_sql}`")
+
+
                 # Payload para el API Gateway
                 payload = {
                     "sql": consulta_sql,
