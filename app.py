@@ -47,7 +47,18 @@ def get_download_link(output_location):
         return None
 
 def main():
-    st.title("Generador de Consultas Athena")
+
+    # Cargar y mostrar el logo
+    logo_path = "imagenes/logo.png"  # Cambia esta ruta a la ubicación de tu logo
+    st.image(logo_path) 
+
+    st.title("Temperatura de los Datos")
+
+    st.subheader("Generador de Consultas Athena")
+
+    consulta_sql = ''
+
+    
 
     # Seleccionar una tabla
     tabla_seleccionada = st.selectbox("Selecciona una tabla", list(tables.keys()))
