@@ -1,6 +1,7 @@
 import streamlit as st
 import requests
 from data import tables
+import json
 
 # Configuración del endpoint de la API de Athena
 api_endpoint = "https://tlu537m7x9.execute-api.us-east-2.amazonaws.com/dev/query"
@@ -29,6 +30,21 @@ def generar_where(tabla_seleccionada, year, month, day):
     
     where_clause = " AND ".join(conditions)
     return where_clause if where_clause else None
+
+def get_download_link(output_location):
+    api_endpoint = "https://tlu537m7x9.execute-api.us-east-2.amazonaws.com/dev/dev-us-east-2-data-hist-lbda_s3_dwl_link"
+    payload = {"s3_path": output_location}
+    headers = {"Content-Type": "application/json"}
+    
+    # Realizar la solicitud POST al API
+    response = requests.post(api_endpoint, data=json.dumps(payload), headers=headers)
+    
+    if response.status_code == 200:
+        download_link = response.json().get("url")  # Asegúrate de que la respuesta tiene la clave 'download_link'
+        return download_link
+    else:
+        st.error(f"Error en la solicitud: {response.status_code}")
+        return None
 
 def main():
     st.title("Generador de Consultas Athena")
@@ -74,9 +90,30 @@ def main():
                 # Realizar la llamada a la API
                 response = requests.post(api_endpoint, json=payload)
 
+                print('response:',response)
+
                 # Mostrar el resultado de la consulta
                 if response.status_code == 200:
                     resultado = response.json()
+
+
+                    output_location = resultado.get("output_location")
+
+                    print('output_location:',output_location)
+
+                    if output_location:
+                        st.success(f"Consulta ejecutada. Output location: {output_location}")
+
+                        # Obtener el enlace de descarga
+                        download_link = get_download_link(output_location)
+
+                        if download_link:
+                            st.markdown(f"[Haz clic aquí para descargar el archivo]({download_link})")
+                    else:
+                        st.error("No se pudo obtener el output_location")
+
+
+                    print('resultado:',resultado)
                     st.write("Resultado:", resultado)
                 else:
                     st.write("Error al ejecutar la consulta:", response.text)
