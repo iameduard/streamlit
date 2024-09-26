@@ -25,7 +25,11 @@ tables = {
             "IP",
             "SaldoDespuesMovimiento"
         ],
-        "campo_fecha": "FECHA"
+        "campo_fecha": "FECHA",
+        "years":{
+            2020:{"meses":[1,2,3]},
+            2021:{"meses":[1,2,3,4,5,6]}
+        }
     },
     "Tbl_Log": {
         "campos": [
@@ -41,8 +45,12 @@ tables = {
             "IDObjeto",
             "EstadoAnteriorObjeto"
         ],
-        "campo_fecha": "Fecha"
-    },  # <- Coma agregada aquí
+        "campo_fecha": "Fecha",
+        "years":{
+            2019:{"meses":[1,2,3]},
+            2020:{"meses":[1,2,3,4,5,6,7,8,9,10,11,12]}
+        }
+    }, 
     "Tbl_sif_hrico_saldodisponible": {
         "campos": [
             "HSDI_IN_ID",
@@ -53,6 +61,10 @@ tables = {
             "HSDI_DE_RETENCIONDIA",
             "HSDI_DE_SALDO_DISPONIBLE"
         ],
-        "campo_fecha": "HSDI_DT_FECHA"
+        "campo_fecha": "HSDI_DT_FECHA",
+        "years":{
+            2020:{"meses":[1,2,3]},
+            2021:{"meses":[1,2,3,4,5,6]}
+        }
     }
 }
