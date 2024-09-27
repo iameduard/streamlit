@@ -1,8 +1,9 @@
 import streamlit as st
 import requests
-import json
-import pandas as pd  # Asegúrate de tener instalada esta librería
+import pandas as pd
 from io import BytesIO
+import openpyxl
+import json
 from data import tables
 
 # Configuración del endpoint de la API de Athena
@@ -26,14 +27,12 @@ def generar_where(tabla_seleccionada, selected_years_months):
     campo_fecha = tables[tabla_seleccionada]["campo_fecha"]
     conditions = []
 
-    # Generar condiciones para los años y meses seleccionados
     year_month_conditions = []
     for year, months in selected_years_months.items():
         if months:
             months_str = ", ".join(str(month) for month in months)
             year_month_conditions.append(f"(year({campo_fecha}) = {year} AND month({campo_fecha}) IN ({months_str}))")
     
-    # Añadir condiciones de año y mes
     if year_month_conditions:
         conditions.append(f"({' OR '.join(year_month_conditions)})")
 
@@ -72,47 +71,46 @@ def get_optimizes_query(query, asterisco, fechaField):
         st.error(f"Error en la solicitud: {response.status_code}")
         return None
 
-def download_and_convert_csv_to_excel(csv_url):
+def convertir_csv_a_excel(csv_data):
     try:
-        # Descargar el archivo CSV desde el enlace
-        csv_data = requests.get(csv_url).content
-        # Leer el CSV usando pandas
-        df = pd.read_csv(BytesIO(csv_data))
-        
-        # Convertir DataFrame a Excel
-        excel_buffer = BytesIO()
-        df.to_excel(excel_buffer, index=False)
-        excel_buffer.seek(0)
-        
-        return excel_buffer
+        # Convertir a Excel
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            csv_data.to_excel(writer, index=False, sheet_name='Consulta')
+
+        # Devolver el archivo Excel como un archivo descargable
+        output.seek(0)
+        return output
     except Exception as e:
-        st.error(f"Error al descargar o convertir el archivo: {e}")
+        st.error(f"Error al convertir el archivo: {str(e)}")
         return None
 
+def mostrar_dataframe(csv_data):
+    try:
+        # Mostrar el DataFrame en la aplicación con los primeros 20 registros
+        st.dataframe(csv_data.head(20))  # Mostrar solo las primeras 20 filas
+    except Exception as e:
+        st.error(f"Error al mostrar el DataFrame: {str(e)}")
+
 def main():
-    # Cargar y mostrar el logo
     logo_path = "imagenes/logo.png"
     st.image(logo_path)
 
     st.title("Temperatura de los Datos")
     st.subheader("Generador de Consultas Athena")
 
-    # Seleccionar una tabla
     tabla_seleccionada = st.selectbox("Selecciona una tabla", list(tables.keys()))
 
     if tabla_seleccionada:
-        # Seleccionar los campos de la tabla
         campos_seleccionados = st.multiselect(
             "Selecciona los campos", tables[tabla_seleccionada]["campos"]
         )
 
-        # Campo opcional para límite
         limite = st.number_input(
             "Especifica el límite de registros (opcional, por defecto es 10)",
             min_value=1, step=1, value=10
         )
 
-        # Filtros por fecha (años y meses disponibles en el JSON)
         st.subheader("Filtros por año y mes")
 
         available_years = list(tables[tabla_seleccionada]["years"].keys())
@@ -125,30 +123,24 @@ def main():
             if selected_months:
                 selected_years_months[year] = selected_months
 
-        # Generar cláusula WHERE
         where_clause = generar_where(tabla_seleccionada, selected_years_months)
 
-        # Mostrar la consulta generada
         if campos_seleccionados:
             consulta_sql = generar_select(tabla_seleccionada, campos_seleccionados, where_clause, limite)
             st.write(f"Consulta generada: `{consulta_sql}`")
 
-            # Botón para ejecutar la consulta
             if st.button("Ejecutar consulta"):
-                # Paso previo de optimización de la consulta
                 campo_fecha = tables[tabla_seleccionada]["campo_fecha"]
                 consulta_sql = get_optimizes_query(consulta_sql, campos_seleccionados, campo_fecha)
 
                 st.write(f"Consulta Optimizada: `{consulta_sql}`")
 
-                # Payload para el API Gateway
                 payload = {
                     "sql": consulta_sql,
                     "database": "dev-us-east-2-data-hist-athena-dbfondos",
                     "bucketName": "dev-us-east-2-data-hist-s3-dbfondos"
                 }
 
-                # Realizar la llamada a la API
                 response = requests.post(api_endpoint, json=payload)
 
                 if response.status_code == 200:
@@ -158,17 +150,27 @@ def main():
                         st.success(f"Consulta ejecutada. Output location: {output_location}")
                         download_link = get_download_link(output_location)
                         if download_link:
-                            # Descargar y convertir CSV a Excel
-                            excel_file = download_and_convert_csv_to_excel(download_link)
-                            if excel_file:
-                                st.download_button(
-                                    label="Descargar archivo",
-                                    data=excel_file,
-                                    file_name="consulta.xlsx",
-                                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                                )
-                        else:
-                            st.error("No se pudo obtener el enlace de descarga.")
+                            st.markdown(f"[Haz clic aquí para descargar el archivo CSV]({download_link})")
+
+                            # Descargar el CSV
+                            response = requests.get(download_link)
+                            if response.status_code == 200:
+                                csv_data = pd.read_csv(BytesIO(response.content))
+
+                                # Mostrar el DataFrame con los primeros 20 valores
+                                mostrar_dataframe(csv_data)
+
+                                # Convertir a Excel y ofrecer para descarga
+                                excel_file = convertir_csv_a_excel(csv_data)
+                                if excel_file:
+                                    st.download_button(
+                                        label="Descargar archivo XLS",
+                                        data=excel_file,
+                                        file_name="consulta.xlsx",
+                                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                                    )
+                            else:
+                                st.error(f"Error al descargar el archivo: {response.status_code}")
                     else:
                         st.error("No se pudo obtener el output_location")
                 else:
