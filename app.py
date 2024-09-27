@@ -1,7 +1,9 @@
 import streamlit as st
 import requests
-from data import tables
 import json
+import pandas as pd  # Asegúrate de tener instalada esta librería
+from io import BytesIO
+from data import tables
 
 # Configuración del endpoint de la API de Athena
 api_endpoint = "https://tlu537m7x9.execute-api.us-east-2.amazonaws.com/dev/query"
@@ -20,7 +22,7 @@ def generar_select(tabla, campos_seleccionados, where_clause, limite):
 
     return select_query
 
-def generar_where(tabla_seleccionada, selected_years_months, day):
+def generar_where(tabla_seleccionada, selected_years_months):
     campo_fecha = tables[tabla_seleccionada]["campo_fecha"]
     conditions = []
 
@@ -34,10 +36,6 @@ def generar_where(tabla_seleccionada, selected_years_months, day):
     # Añadir condiciones de año y mes
     if year_month_conditions:
         conditions.append(f"({' OR '.join(year_month_conditions)})")
-
-    # Añadir día si está seleccionado
-    if day:
-        conditions.append(f"day({campo_fecha}) = {day}")
 
     where_clause = " AND ".join(conditions)
     return where_clause if where_clause else None
@@ -72,6 +70,23 @@ def get_optimizes_query(query, asterisco, fechaField):
         return transformedQuery
     else:
         st.error(f"Error en la solicitud: {response.status_code}")
+        return None
+
+def download_and_convert_csv_to_excel(csv_url):
+    try:
+        # Descargar el archivo CSV desde el enlace
+        csv_data = requests.get(csv_url).content
+        # Leer el CSV usando pandas
+        df = pd.read_csv(BytesIO(csv_data))
+        
+        # Convertir DataFrame a Excel
+        excel_buffer = BytesIO()
+        df.to_excel(excel_buffer, index=False)
+        excel_buffer.seek(0)
+        
+        return excel_buffer
+    except Exception as e:
+        st.error(f"Error al descargar o convertir el archivo: {e}")
         return None
 
 def main():
@@ -110,11 +125,8 @@ def main():
             if selected_months:
                 selected_years_months[year] = selected_months
 
-        # Filtro opcional para día
-        day = st.number_input("Día (opcional)", min_value=1, max_value=31, step=1, value=None, format="%d")
-
         # Generar cláusula WHERE
-        where_clause = generar_where(tabla_seleccionada, selected_years_months, day)
+        where_clause = generar_where(tabla_seleccionada, selected_years_months)
 
         # Mostrar la consulta generada
         if campos_seleccionados:
@@ -146,7 +158,17 @@ def main():
                         st.success(f"Consulta ejecutada. Output location: {output_location}")
                         download_link = get_download_link(output_location)
                         if download_link:
-                            st.markdown(f"[Haz clic aquí para descargar el archivo]({download_link})")
+                            # Descargar y convertir CSV a Excel
+                            excel_file = download_and_convert_csv_to_excel(download_link)
+                            if excel_file:
+                                st.download_button(
+                                    label="Descargar archivo",
+                                    data=excel_file,
+                                    file_name="consulta.xlsx",
+                                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                                )
+                        else:
+                            st.error("No se pudo obtener el enlace de descarga.")
                     else:
                         st.error("No se pudo obtener el output_location")
                 else:
